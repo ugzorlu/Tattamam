@@ -1,0 +1,166 @@
+datasource db {
+  provider = "mysql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output = "./generated"
+}
+
+model Recipe {
+  id               Int                 @id @default(autoincrement())
+  title            String              @db.VarChar(255)
+  alternativeTitle String?             @db.VarChar(255)
+  slug             String              @unique @db.VarChar(255)
+  description      String?             @db.Text
+  imageUrl         String?             @db.VarChar(512)
+  servingsBase     Int                 @default(4)
+  prepTimeMinutes  Int?
+  cookTimeMinutes  Int?
+  likeCount        Int                 @default(0)
+  budgetLevel      Int                 @default(2)
+  difficultyLevel  Int                 @default(2)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime?           @updatedAt
+
+  ingredients     RecipeIngredient[]
+  steps           PreparationStep[]
+  tips            RecipeTip[]
+  likes           RecipeLike[]
+  categories      Category[]          @relation("RecipeCategories")
+  recipeTags      RecipeTag[]
+  favoritedBy     User[]              @relation("UserFavorites")
+
+  @@index([slug])
+}
+
+model RecipeIngredient {
+  id                  Int                @id @default(autoincrement())
+  recipeId            Int
+  recipe              Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  alternativeToId     Int?
+  alternativeTo       RecipeIngredient?  @relation("IngredientAlternatives", fields: [alternativeToId], references: [id], onDelete: SetNull)
+  alternatives        RecipeIngredient[] @relation("IngredientAlternatives")
+  
+  name                String             @db.VarChar(255)
+  traditionalQuantity Decimal            @db.Decimal(10, 2)
+  traditionalUnit     String             @db.VarChar(50)
+  exactQuantity       Decimal?           @db.Decimal(10, 2)
+  exactUnit           String?            @db.VarChar(50)
+  notes               String?            @db.VarChar(255)
+  sectionName         String?            @db.VarChar(100) // e.g., "For the sauce", "Main"
+  displayOrder        Int                @default(0)
+
+  @@index([recipeId])
+  @@index([alternativeToId])
+}
+
+model PreparationStep {
+  id                  Int                @id @default(autoincrement())
+  recipeId            Int
+  recipe              Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  stepNumber          Int
+  traditionalInstruction String            @db.Text
+  exactInstruction       String?           @db.Text
+  mixedInstruction       String            @db.Text
+  durationMinutes     Int?
+  sectionName         String?            @db.VarChar(100)
+
+  @@index([recipeId])
+}
+
+model RecipeTip {
+  id                  Int                @id @default(autoincrement())
+  recipeId            Int
+  recipe              Recipe             @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  content             String             @db.Text
+  displayOrder        Int                @default(0)
+
+  @@index([recipeId])
+}
+
+model RecipeLike {
+  id        Int      @id @default(autoincrement())
+
+  recipeId  Int
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  ipHash    String   @db.VarChar(64)
+  userAgent String?  @db.VarChar(255)
+
+  fingerprint String @db.VarChar(128)
+
+  createdAt DateTime @default(now())
+
+  @@unique([recipeId, ipHash, fingerprint], name: "recipe_visitor")
+  @@index ([recipeId])
+  @@index ([ipHash])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100)
+  slug        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  recipes     Recipe[] @relation("RecipeCategories")
+
+  @@index([slug])
+}
+
+model Tag {
+  id        Int          @id @default(autoincrement())
+  name      String       @unique @db.VarChar(100)
+  slug      String       @unique @db.VarChar(100)
+  kind      Int          @default(1) @db.TinyInt
+  group     String?      @db.VarChar(100)
+  emoji     String?      @db.VarChar(16)
+  recipeTags RecipeTag[]
+
+  @@index([slug])
+}
+
+model User {
+  id                    Int       @id @default(autoincrement())
+  email                 String    @unique @db.VarChar(255)
+  username              String    @unique @db.VarChar(100)
+  passwordHash          String    @db.VarChar(255)
+  emailVerified         DateTime?
+  verificationToken     String?   @db.VarChar(255)
+  resetPasswordToken    String?   @db.VarChar(255)
+  resetPasswordExpires  DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  favoriteRecipes       Recipe[]  @relation("UserFavorites")
+
+  @@index([email])
+  @@index([username])
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  email     String   @db.VarChar(255)
+  message   String   @db.Text
+  sentAt    DateTime @default(now())
+
+  @@index([sentAt])
+}
+
+model RecipeTag {
+  recipeId   Int
+  recipe     Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  tagId      Int
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  // 0: CORE_INGREDIENT, 1: DOMINANT_INGREDIENT, 2: COOKING_TECHNIQUE
+  kind       Int      @default(0) @db.TinyInt
+  importance Int      @default(1)
+  
+  @@id([recipeId, tagId])
+  @@index([recipeId])
+  @@index([tagId])
+}
